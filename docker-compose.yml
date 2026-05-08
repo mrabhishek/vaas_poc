@@ -1,0 +1,34 @@
+version: '3.8'
+services:
+  # Pillar 1: The Policy Engine
+  opa:
+    image: openpolicyagent/opa:latest
+    ports:
+      - "8181:8181"
+    command: ["run", "--server", "--addr=0.0.0.0:8181"]
+    volumes:
+      - ./policy.rego:/policy.rego
+
+  # Pillar 2: The Local LLM (Brain)
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # This line ensures the model is pulled as soon as the container starts
+    entrypoint: /bin/sh -c "ollama serve & sleep 5 && ollama pull tinyllama && wait"
+
+  # Pillar 3: The Transparent Proxy (Your Invention)
+  vaas-proxy:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OPA_URL=http://opa:8181/v1/data/vaas/authz/allow
+    depends_on:
+      - opa
+      - ollama
+
+volumes:
+  ollama_data:
